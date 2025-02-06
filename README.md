@@ -4,6 +4,27 @@ The app is very adaptable. Just have a look to the EBNF source file (SSA.bnf) an
 The current configuration is for human understanding the message albeit in json format.
 Compile your adaptation using the linux command ./EBNF.sh. Have your EBNF development environment as implied in the Github EBNFPlus repository.
 
+Supplied supports following messages (text is a snip from file *SSA.bnf*):
+
+     MTI = 	Message (0x0a),
+	"1100"		,pOut(0x0a, '"1100 AuthorizationRequest":') 		,MsgLI	|
+	"1110"		,pOut(0x0a, '"1110 AuthorizationResponse":')		,MsgLI	|
+	"1200"		,pOut(0x0a, '"1200 PaymentRequest":')			,MsgLI	|
+	"1210"		,pOut(0x0a, '"1210 PaymentResponse":')			,MsgLI	|
+	"1220"		,pOut(0x0a, '"1220 TransactionAdvice":')		,MsgLI	|
+	"1221"		,pOut(0x0a, '"1221 TransactionAdviceRepeat":')		,MsgLI	|
+	"1230"		,pOut(0x0a, '"1230 AuthorizationResponse":')		,MsgLI	|
+	"1420"		,pOut(0x0a, '"1420 ReversalAdvice":')			,MsgLI	|
+	"1421"		,pOut(0x0a, '"1421 ReversalAdviceRepeat":')		,MsgLI	|
+	"1430"		,pOut(0x0a, '"1430 ReversalAdviceResponse":') 		,MsgLI	|
+	"1520"		,pOut(0x0a, '"1520 ReconciliationAdvice":') 		,MsgLI	|
+	"1530"		,pOut(0x0a, '"1530 ReconciliationAdviceResponse":') 	,MsgLI	|
+	"1820"		,pOut(0x0a, '"1820 NetworkManagementAdvice":')		,MsgLI	|
+	"1821"		,pOut(0x0a, '"1821 NetworkManagementAdviceRepeat":')	,MsgLI	|
+	"1830"		,pOut(0x0a, '"1830 NetworkManagementAdviceResponse":')	,MsgLI	|
+	"9100"		,pOut(0x0a, '"9100 IndoorAuthorizationRequest":') 	,MsgLI	|
+	"9110"		,pOut(0x0a, '"9110 IndoorAuthorizationResponse":')	,MsgLI	;
+ 
 ## Usage
 E.g. type *SSA 001.bin*, where *SSA* is the app and *001.bin* is the file that contains the IFSF message in binary format.
 
