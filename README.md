@@ -26,7 +26,7 @@ Supplied configuration supports following messages (text is a snip from file *SS
 	"9110"		,pOut(0x0a, '"9110 IndoorAuthorizationResponse":')	,MsgLI	;
  
 ## Usage
-E.g. type *SSA 001.bin*, where *SSA* is the app and *001.bin* is the file that contains the IFSF message in binary format.
+E.g. type *./SSA 001.bin*, where *SSA* is the app and *001.bin* is the file that contains the IFSF message in binary format.
 
 The SSA will convert your binary into something like:
 
