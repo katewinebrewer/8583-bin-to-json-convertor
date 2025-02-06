@@ -1,7 +1,7 @@
 # 8583-bin-to-json-convertor
 An app that accepts binary ISO 8583 messages and delivers its json equivalent.
-The app is very adaptable. Just have a look to the EBNF source file (SSA.bnf) and you will see how to change it to your needs.
-The current configuration is for human understandinig the message albeit in json format.
+The app is very adaptable. Just have a look to the EBNF source file (SSA.bnf) and you will see how to change it to your specific needs.
+The current configuration is for human understanding the message albeit in json format.
 Compile your adaptation using the linux command ./EBNF.sh. Have your EBNF development environment as implied in the Github EBNFPlus repositry.
 
 ## Usage
