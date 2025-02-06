@@ -1,0 +1,803 @@
+<<
+ %include "../EBNF/EBNFix.asm"
+;------------------------------------------------------------------------------
+section .bss
+
+aBitMap0 	resq	1
+aBitMap1	resq	1
+aBitMap48	resq	1
+aBitMap488	resq	1
+
+aBitMapCur	resq	1
+;------------------------------------------------------------------------------
+section .text
+;xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+; candidates for the EBNFKernel
+;xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+LIStore: ; Store LstIn at inline address
+	; usage: LIStore(<address>)
+	; uses :rax, rsi, rdi, rdx
+	pop rsi
+	lodsq
+	mov rdi, rax
+	push rsi
+	mov rsi, rLastIn
+	mov rdx, rLastInLen
+	add rdi, rdx
+	cld
+LIStr1:	dec rdi
+	lodsb
+	mov [rdi],al
+	dec rdx
+	jnz LIStr1
+	ret
+
+;------------------------------------------------------------------------------
+TapMsg: ; Display txt by pOut between TapMsg and MsgTap
+	; Usage: TapMsg <code with pOut> MsgTap
+	; Condition: code should not extend stack
+	
+	pop rbx
+	push rOutPnt
+	jmp rbx
+
+MsgTap: pop rbx
+	pop rsi
+	push rbx
+	mov rdx, rOutPnt
+	sub rdx, rsi
+	call MessageMem
+	ret
+
+;xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+SetBitMapCur:
+	; usage: SetBitMapCur(x) where x= e.g *aBitMap0
+	
+	pop rsi
+	mov rdi, aBitMapCur
+	cld
+	movsq
+	jmp rsi
+;------------------------------------------------------------------------------
+ShowBitMap0:
+	mov rdi, rOutPnt
+	mov rdx, [aBitMapCur]
+	mov rdx, [rdx]
+	xor rcx, rcx
+	cld
+ShowB2:	inc rcx
+	shl rdx, 1
+	jnc ShowB1
+	mov rax, rcx
+	call Bin2Dec
+	mov al, " "
+	stosb
+ShowB1:	cmp rcx, 64	
+	jnz ShowB2
+	mov rOutPnt, rdi
+	inc rcx
+	dec rOutPnt
+	ret
+;------------------------------------------------------------------------------
+
+ShowBitMap1:
+	mov rdi, rOutPnt
+	mov rdx, [aBitMap1]
+	xor rcx, rcx
+	cld
+ShwB12:	inc rcx
+	shl rdx, 1
+	jnc ShwB11
+	mov rax, rcx
+	add rax, 64
+	call Bin2Dec
+	mov al, " "
+	stosb
+ShwB11:	cmp rcx, 64
+	jnz ShwB12
+	mov rOutPnt, rdi
+	inc rcx
+	dec rOutPnt
+	ret
+;------------------------------------------------------------------------------
+IsBit:	; usage: IsBit(n) or Call-db-statement)
+	; out: rOk = nth bit of Bitmap0
+	; uses rax
+	; mod 64, to keep references in line with IFSF
+	; above 64, be sure to have set BitMap current
+	
+	pop rsi
+	cld
+	lodsq
+	and rax, 0x3ff
+	mov rdx,64	
+	sub rdx, rax
+	mov rax, [aBitMapCur]
+	mov rax, [rax]
+ 	xor rcx, rcx
+	bt rax,rdx
+	jnc IsBt1
+
+	inc rcx
+IsBt1: jmp rsi
+;------------------------------------------------------------------------------
+IsBit1:	; usage: IsBit(n) or Call-db-statement)
+	; out: rOk = nth bit of Bitmap0
+	; uses rax
+	
+	pop rsi
+	cld
+	lodsq
+	sub rax, 64
+	and rax, 0x3ff		; mod 64, to keep references in line with IFSF
+	mov rdx,64		; above 64, be sure to have set BitMap current
+	sub rdx, rax
+	mov rax, [aBitMap1]
+ 	xor rcx, rcx
+	bt rax,rdx
+	jnc IsBt11
+	inc rcx
+IsBt11: jmp rsi
+
+;xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+>>
+
+/*ISO8583-1 p8
+	Primitives in EBNFKernel 2212
+	a	; a = "A".."Z"| "a".."z";	alfabetic
+	b	; b = ^0..^255;			byte
+	n	; n = "0".."9";		numeric digit */
+	
+an	= a | n;
+anp	= an | " ";
+ans	= an | s ;
+ansb	= ^0..^255;
+as	= a | s;
+CCYY	= 4*n;
+YY	= 2*n;
+DD	= ("0", "1".."9")|("1".."2","0".."9")|"30"|"31";
+hh	= "0".."1", "0".."9"|"1","0".."9"|"2","0".."3";
+LVAR	= n;
+LLVAR	= 2*n;
+LLLVAR	= 3*n;
+MM	= "0", "1".."9"|"1", "0".."2";
+mm	= "0".."5","0".."9";
+
+ns	= n|s;
+p	= " ";
+s	= ^10..^255;
+nss	= "0".."5","0".."9";
+HexDig	= "0".."9"|"A".."F"|"a".."f";
+
+Rum	 = 	Message('Starting..')	, F2I (sCLArg(1))			, Message('Loaded source..Compiled items: ')
+					, I2O (*Grammar)			, Message('Grammar OK..')
+					, O2F (sConcat(sCLArg(1),'.json'))	, Message('Saved object.. Done !', 0x0A)
+    					| ErrorMessage('Aj, some error');
+
+Grammar	= 		 pOut('{"TrxStream":{', 0x0A),
+	  { Msg		,pOut('},', 0x0a) 
+		}, 
+	  (2*DropLastChar), pOut(0x0a, '}}', 0x0a);
+
+Msg = (	MTI, pOut ('{'), Message (": "),
+					 <.	xor rax,rax.>
+					 <.	mov [aBitMap0]  ,rax.>
+					 <.	mov [aBitMap1]  ,rax.>
+					 <.	mov [aBitMap48] ,rax.>
+					 <.	mov [aBitMap488],rax.>
+	    , BitMap0, Fields0 )| 	<<	call Message>>
+	    				<<	 db 1, ",">>
+	    				<<	call pOut>>
+	    				<<	 db 5, '"?":"'>>
+	    		 	  (anp, pOutLI| b, pOutLIHex), pOut('"') ;
+
+MTI = 	Message (0x0a),
+	"1100"		,pOut(0x0a, '"1100 AuthorizationRequest":') 		,MsgLI	|
+	"1110"		,pOut(0x0a, '"1110 AuthorizationResponse":')		,MsgLI	|
+	"1200"		,pOut(0x0a, '"1200 PaymentRequest":')			,MsgLI	|
+	"1210"		,pOut(0x0a, '"1210 PaymentResponse":')			,MsgLI	|
+	"1220"		,pOut(0x0a, '"1220 TransactionAdvice":')		,MsgLI	|
+	"1221"		,pOut(0x0a, '"1221 TransactionAdviceRepeat":')		,MsgLI	|
+	"1230"		,pOut(0x0a, '"1230 AuthorizationResponse":')		,MsgLI	|
+	"1420"		,pOut(0x0a, '"1420 ReversalAdvice":')			,MsgLI	|
+	"1421"		,pOut(0x0a, '"1421 ReversalAdviceRepeat":')		,MsgLI	|
+	"1430"		,pOut(0x0a, '"1430 ReversalAdviceResponse":') 		,MsgLI	|
+	"1520"		,pOut(0x0a, '"1520 ReconciliationAdvice":') 		,MsgLI	|
+	"1530"		,pOut(0x0a, '"1530 ReconciliationAdviceResponse":') 	,MsgLI	|
+	"1820"		,pOut(0x0a, '"1820 NetworkManagementAdvice":')		,MsgLI	|
+	"1821"		,pOut(0x0a, '"1821 NetworkManagementAdviceRepeat":')	,MsgLI	|
+	"1830"		,pOut(0x0a, '"1830 NetworkManagementAdviceResponse":')	,MsgLI	|
+	"9100"		,pOut(0x0a, '"9100 IndoorAuthorizationRequest":') 	,MsgLI	|
+	"9110"		,pOut(0x0a, '"9110 IndoorAuthorizationResponse":')	,MsgLI	;
+
+BitMap0  = (8*b)	, LIStore(*aBitMap0), SetBitMapCur(*aBitMap0)
+			, pOut(0x0a, 0x09, '"BitMap0" : "'),		TapMsg ShowBitMap0 Message(" B: ") 		MsgTap pOut('",') ;
+BitMap1  = (8*b)	, LIStore(*aBitMap1)
+			, pOut(0x0a, 0x09, '"BitMap1" : "'),		TapMsg ShowBitMap1 Message(0x0a, "      B1: ")	MsgTap pOut('",') ;
+BitMap48 = (8*b)	, LIStore(*aBitMap48), SetBitMapCur(*aBitMap48) 
+			, pOut(0x0a, 0x09, 0x09, '"BitMap48" : "'),	TapMsg ShowBitMap0 Message(0x0a, "     B48: ")	MsgTap pOut('",') ;
+
+/*IFSF1997*/
+Fields0=
+	[IsBit(1), 			BitMap1],	
+	[IsBit(2), (LLVAR *ans),	pOut(0x0a, 0x09, '"B02 PAN (manual)"		: "'), pOutLI,	pOut('",')],
+	[IsBit(3), (6*n),		pOut(0x0a, 0x09, '"B03 Processing code"		: {') + Bit3 ],
+	[IsBit(4), (12*n),		pOut(0x0a, 0x09, '"B04 Amount transaction"	: "'), pOutLI, pOut("(")
+					+ (10*n), pOutLITrim, pOut("."), (2*n), pOutLI, pOut(")"),	pOut('",')],
+	[IsBit(5), 			pOut(0x0a, 0x09, '"B05"				: "'), 		pOut('",')],
+	[IsBit(6),			pOut(0x0a, 0x09, '"B06"				: "'), 		pOut('",')],
+	[IsBit(7), (10*n), 		pOut(0x0a, 0x09, '"B07 Date time transmission"	: "')
+											+ MM, pOutLI,	pOut('-'),
+											  DD, pOutLI,	pOut('T'), 
+											  hh, pOutLI,	pOut(':'), 
+											  mm, pOutLI,	pOut(':'),
+									 		 nss, pOutLI,	pOut('.000",')],
+	[IsBit(8), 			pOut(0x0a, 0x09, '"B08"				: "'), 		pOut('",')],
+	[IsBit(9), 			pOut(0x0a, 0x09, '"B09"				: "'),		pOut('",')],
+	[IsBit(10), 			pOut(0x0a, 0x09, '"B10"				: "'),		pOut('",')],
+	[IsBit(11), (6*n), 		pOut(0x0a, 0x09, '"B11 STAN"			: "'), pOutLI,	pOut('",')],	/*IFSF2003 12*n*/
+	[IsBit(12), (12*n),		pOut(0x0a, 0x09, '"B12 Date time transaction"	: "20')
+											+ YY, pOutLI, pOut('-'),	/*ISO8601*/
+											  MM, pOutLI, pOut('-'),
+											  DD, pOutLI, pOut('T'), 
+											  hh, pOutLI, pOut(':'), 
+											  mm, pOutLI, pOut(':'),
+											  nss,pOutLI, pOut('.000",')],
+	[IsBit(13), (4*n),		pOut(0x0a, 0x09, '"B13"				: "'), pOutLI,	pOut('",')],
+	[IsBit(14), (4*n),		pOut(0x0a, 0x09, '"B14"				: "'), pOutLI,	pOut('",')],
+	[IsBit(15), (6*n),		pOut(0x0a, 0x09, '"B15 Settlement date"		: "'), pOutLI,	pOut('",')],
+	[IsBit(16),			pOut(0x0a, 0x09, '"B16"				: "'),		pOut('",')],
+	[IsBit(17),			pOut(0x0a, 0x09, '"B17"				: "'),		pOut('",')],
+	[IsBit(18), (4*n),		pOut(0x0a, 0x09, '"B18 reference number"	: "'), pOutLI,	pOut('",')],
+	[IsBit(19),			pOut(0x0a, 0x09, '"B19"				: "'),		pOut('",')],
+	[IsBit(20), (3*n),		pOut(0x0a, 0x09, '"B20 Language code"		: "'), pOutLI,	pOut('",')],
+	[IsBit(21),			pOut(0x0a, 0x09, '"B21"				: "'),		pOut('",')],
+	
+	[IsBit(22), (12*an),		pOut(0x0a, 0x09, '"B22 POS data code" 		: {') + Bit22 ],
+											
+	[IsBit(23), 			pOut(0x0a, 0x09, '"B23"				: "'), pOutLI,	pOut('",')],
+	[IsBit(24), (3*n),		pOut(0x0a, 0x09, '"B24 Function code" 		: "'), pOutLI,	pOut(' (')
+											+ Bit24,	pOut(')",')],
+											
+	[IsBit(25), (4*n),		pOut(0x0a, 0x09, '"B25 Message reason code"	: "'), pOutLI,	pOut(' (')
+											+ Bit25,	pOut(')",')],
+	
+	[IsBit(26), (4*n),		pOut(0x0a, 0x09, '"B26 Card acceptor busnss code" : "'), pOutLI, pOut(' (')
+											+ Bit26,	pOut(')",')],
+	
+	[IsBit(27),			pOut(0x0a, 0x09, '"B27" 			: "'),		pOut('",')], 
+	[IsBit(28), (6*n),		pOut(0x0a, 0x09, '"B28"				: "'), pOutLI,	pOut('",')],
+	[IsBit(29),			pOut(0x0a, 0x09, '"B29"				: "'),		pOut('",')],
+	[IsBit(30), (24*n),		pOut(0x0a, 0x09, '"B30 Original amount"		: "'), 		pOut("(")
+					+ (22*n), pOutLITrim, pOut("."), (2*n), pOutLI, pOut("[l])"),	pOut('",')],
+	[IsBit(31),			pOut(0x0a, 0x09, '"B31"				: "'), 		pOut('",')],
+
+	[IsBit(32), 			pOut(0x0a, 0x09, '"B32 Acquiring institution ID"	: "'),
+		    LLVAR * (n,	pOutLI),								pOut('",')],
+	[IsBit(33),			pOut(0x0a, 0x09, '"B33"				: "'), 		pOut('",')],
+	[IsBit(34),			pOut(0x0a, 0x09, '"B34"				: "'), 		pOut('",')],
+	[IsBit(35), 			pOut(0x0a, 0x09, '"B35 Track 2"			: "'), 
+		    LLVAR * (ans, pOutLI),								pOut('",')],
+	[IsBit(36),			pOut(0x0a, 0x09, '"B36"				: "'),		pOut('",')],
+	[IsBit(37),			pOut(0x0a, 0x09, '"B37 Retrieval reference num"	: "'), pOutLI,	pOut('",')],
+	[IsBit(38), (6*anp),		pOut(0x0a, 0x09, '"B38 Authorisation code"	: "'), pOutLI,	pOut('",')],
+	
+	[IsBit(39), (3*n),		pOut(0x0a, 0x09, '"B39 Action code"		: "'), pOutLI,	pOut(' (')
+											+ Bit39,	pOut(')",')],
+											
+	[IsBit(40), 			pOut(0x0a, 0x09, '"B40"				: "'), 		pOut('",')],
+	[IsBit(41), (8*ans),		pOut(0x0a, 0x09, '"B41 Terminal ID"		: "'), pOutLI,	pOut('",')],
+	[IsBit(42), (15*ans),		pOut(0x0a, 0x09, '"B42 CAIC"			: "'), pOutLI,	pOut('",')],
+	[IsBit(43), (LLVAR * ans),	pOut(0x0a, 0x09, '"B43 CAN/L"			: "') + LLVAR * ( '\', pOut('\\')
+													  | '"', pOut('\"')
+													  | ans, pOutLI)   
+											     ,  	pOut('",')],
+	[IsBit(44), 			pOut(0x0a, 0x09, '"B44" 			: "'), 		pOut('",')],
+	[IsBit(45),			pOut(0x0a, 0x09, '"B45 Track 1 data"		: "'),
+		    LLVAR * (ans, pOutLI),							pOut('",')],
+	[IsBit(46), 			pOut(0x0a, 0x09, '"B46"				: "'), 		pOut('",')],
+	[IsBit(47), 			pOut(0x0a, 0x09, '"B47"				: "'), 		pOut('",')],
+	[IsBit(48), (LLLVAR * b),	pOut(0x0a, 0x09, '"B48 Msg ctrl data elements"	: {') + (3*b, BitMap48, Fields48, SetBitMapCur(*aBitMap0) )],
+	[IsBit(49), (3*an),		pOut(0x0a, 0x09, '"B49 Currency code"		: "'), pOutLI,	pOut(' (')
+											+ Bit49,	pOut(')",')],
+
+	[IsBit(50), (3*n),		pOut(0x0a, 0x09, '"B50 Currency code reconcili"	: "'), pOutLI,	pOut('",')],
+	[IsBit(51),			pOut(0x0a, 0x09, '"B51"				: "'), 		pOut('",')],
+	[IsBit(52), (8*b),		pOut(0x0a, 0x09, '"B52 PIN data"		: "'),pOutLIHex,pOut('",')],
+	[IsBit(53), (LLVAR * b), 	pOut(0x0a, 0x09, '"B53 Security related info"	: {') + Bit53H2H ],
+	[IsBit(54), (LLLVAR*ans),	pOut(0x0a, 0x09, '"B54 Amounts additional"	: "'), pOutLI,	pOut('",')],
+	[IsBit(55),			pOut(0x0a, 0x09, '"B55"				: "'), 		pOut('",')],
+	[IsBit(56), 			pOut(0x0a, 0x09, '"B56 Original data elements"	: "'),
+		    LLVAR * (n, pOutLI),								pOut('",')],
+	[IsBit(57),			pOut(0x0a, 0x09, '"B57"				: "'), 		pOut('",')],
+	[IsBit(58),			pOut(0x0a, 0x09, '"B58"				: "'), 		pOut('",')],
+	[IsBit(59),			pOut(0x0a, 0x09, '"B59 Transport data"		: "'),
+		    LLLVAR * (ans, pOutLI),								pOut('",')],
+	[IsBit(60), LLLVAR * ans,	pOut(0x0a, 0x09, '"B60 Entered PIN Digits"	: "'), pOutLI,	pOut('",')],
+	[IsBit(61), LLLVAR * ans, 	pOut(0x0a, 0x09, '"B61 Failed PIN attempts"	: "'), pOutLI,	pOut('",')],
+	[IsBit(62), (LLLVAR*ans),	pOut(0x0a, 0x09, '"B62 Product sets"		: {') + Bit62 ],
+	[IsBit(63), (LLLVAR*ans),	pOut(0x0a, 0x09, '"B63 Product data"		: {') + (Bit63| LLLVAR*ans, pOut('"Warning format error"'))],
+	[IsBit(64), (8*b),		pOut(0x0a, 0x09, '"B64 MAC"			: "'), pOutLIHex, pOut('",')],		/* no spec in CGI spec. */
+	[IsBit1(74), (10*n),		pOut(0x0a, 0x09, '"B74 Credits number"		: "'), pOutLI,	pOut('",')],
+	[IsBit1(75), (10*n),		pOut(0x0a, 0x09, '"B75 Credits reversal number"	: "'), pOutLI,	pOut('",')],
+	[IsBit1(76), (10*n),		pOut(0x0a, 0x09, '"B76 Debits number"		: "'), pOutLI,	pOut('",')],
+	[IsBit1(77), (10*n),		pOut(0x0a, 0x09, '"B77 Debits reversal number"	: "'), pOutLI,	pOut('",')],
+	[IsBit1(86), (16*n),		pOut(0x0a, 0x09, '"B86 Credits amount"		: "'), 		pOut("(")
+					+ (14*n), pOutLITrim, pOut("."), (2*n), pOutLI, pOut("[l])"),	pOut('",')],
+	[IsBit1(87), (16*n),		pOut(0x0a, 0x09, '"B87 Credits reversal amount"	: "'), 	 	pOut("(")
+					+ (14*n), pOutLITrim, pOut("."), (2*n), pOutLI, pOut("[l])"),	pOut('",')],
+	[IsBit1(88), (16*n),		pOut(0x0a, 0x09, '"B88 Debits amount"		: "'), 	 	pOut("(")
+					+ (14*n), pOutLITrim, pOut("."), (2*n), pOutLI, pOut("[l])"),	pOut('",')],
+	[IsBit1(89), (16*n),		pOut(0x0a, 0x09, '"B89 Debits reversal amount"	: "'), 		pOut("(")
+					+ (14*n), pOutLITrim, pOut("."), (2*n), pOutLI, pOut("[l])"),	pOut('",')],
+	[IsBit1(97), (("C"|"D"),16*n),	pOut(0x0a, 0x09, '"B97 Net reconciliation"	: "'), pOutLI,	pOut('",')],
+	[IsBit1(123), (LLLVAR*ans),	pOut(0x0a, 0x09, '"B123 Proprietary totals"	: "'), pOutLI,	pOut('",')],
+	[IsBit1(128), (8*b),		pOut(0x0a, 0x09, '"B128 Message authentication code"	: "'), pOutLI,	pOut('",')],
+	DropLastChar ;
+
+Fields48=
+	[IsBit(2), (20*an),		pOut(0x0a, 0x09, 0x09, '"B02 Hard-/Software config."	: "'), pOutLI,	pOut('",')],
+	[IsBit(3), (2*a),		pOut(0x0a, 0x09, 0x09, '"B03 Language code"		: "'), pOutLI,	pOut('",')],
+	[IsBit(4), (10*n),		pOut(0x0a, 0x09, 0x09, '"B04 Batch/sequence number"	: "'), pOutLI,	pOut('",')],
+	[IsBit(5), (3*n),		pOut(0x0a, 0x09, 0x09, '"B05 Shift number"		: "'), pOutLI,	pOut('",')],
+	[IsBit(6), (LLVAR*n),		pOut(0x0a, 0x09, 0x09, '"B06 Clerk ID"			: "'), pOutLI,	pOut('",')],
+	[IsBit(8), (LLLVAR * ans,	pOut(0x0a, 0x09, 0x09, '"B08 Customer data"		: "')) + LLLVAR * ( '\', pOut('\\')
+														  | '"', pOut('\"')
+														  | ans, pOutLI)
+											    	     ,		pOut('",')],
+	[IsBit(9),  (LLVAR * ns),	pOut(0x0a, 0x09, 0x09, '"B09 Track2 2nd card"		: "'), pOutLI,	pOut('",')],
+	[IsBit(10), (LLVAR * ns),	pOut(0x0a, 0x09, 0x09, '"B10 Track1 2nd card"		: "'), pOutLI,	pOut('",')],
+	[IsBit(13), (LLVAR * ans),	pOut(0x0a, 0x09, 0x09, '"B13 RFID data"			: "'), pOutLI,	pOut('",')],
+	[IsBit(14), (2*ans), 		pOut(0x0a, 0x09, 0x09, '"B14 PIN encryption method"	: "'), pOutLI,	pOut('",')],
+	[IsBit(15), (8*n), 		pOut(0x0a, 0x09, 0x09, '"B15 Settlement period"		: "'), pOutLI,	pOut('",')],
+	[IsBit(16), (14*n), 		pOut(0x0a, 0x09, 0x09, '"B16 Online time"		: "'), pOutLI,	pOut('",')],
+	[IsBit(37), ans, 		pOut(0x0a, 0x09, 0x09, '"B37 Vehicle ID entry mode"	: "'), pOutLI,	pOut('",')],
+	[IsBit(38), ans, 		pOut(0x0a, 0x09, 0x09, '"B38 Pump linked indicator"	: "'), pOutLI,	pOut('",')],
+	[IsBit(39), (10*n), 		pOut(0x0a, 0x09, 0x09, '"B39 Delivery note number"	: "'), pOutLI,	pOut('",')],
+	[IsBit(41), (LLVAR*ans), 	pOut(0x0a, 0x09, 0x09, '"B41 Propriety use"		: "'), pOutLI,	pOut('",')],
+	[IsBit(43), n, 			pOut(0x0a, 0x09, 0x09, '"B43 Solution identifier"	: "'), pOutLI,	pOut('",')],
+	[IsBit(44), 6*n, 		pOut(0x0a, 0x09, 0x09, '"B44 Truck/Driver ID"		: "'), pOutLI,	pOut('",')],
+	[IsBit(45), LLVAR*n, 		pOut(0x0a, 0x09, 0x09, '"B45 VIB box identifier"	: "'), pOutLI,	pOut('",')],
+	[IsBit(46), LLVAR*an, 		pOut(0x0a, 0x09, 0x09, '"B46 Truck VIN"			: "'), pOutLI,	pOut('",')],
+	[IsBit(47), LVAR*n, 		pOut(0x0a, 0x09, 0x09, '"B47 Mileage"			: "'), pOutLI,	pOut('",')],
+	[IsBit(48), 14*n, 		pOut(0x0a, 0x09, 0x09, '"B48 Timestamp"			: "'), pOutLI,	pOut('",')],
+	[IsBit(49), LLVAR*b, 		pOut(0x0a, 0x09, 0x09, '"B49 VIB additional data"	: "'), pOutLI,	pOut('",')],
+	[IsBit(50), (2*n), 		pOut(0x0a, 0x09, 0x09, '"B50 Pump"			: "'), pOutLI,	pOut('",')],
+	[IsBit(51), (2*n), 		pOut(0x0a, 0x09, 0x09, '"B51 Nozzle"			: "'), pOutLI,	pOut('",')],
+	
+	[IsBit(52), 7*b, 		pOut(0x0a, 0x09, 0x09, '"B52 IDS specific"		: "'), pOutLI,	pOut('",')],
+	[IsBit(53), LLVAR*b, 		pOut(0x0a, 0x09, 0x09, '"B53 IDS specific"		: "'), pOutLI,	pOut('",')],	/* LLVAR missed in CGI spec. */
+	DropLastChar,
+	pOut('},');
+
+
+Bit3	=    /*Processing code, Positions 1 & 2*/
+	 pOut(0x0a, 0x09, 0x09, '"P12" : "'),
+	 (	"00", pOut('00 Debits Payment/Goods and services",')|
+		"01", pOut('01 Debits Cash withdrawal",')|
+		"09", pOut('09 Debits Goods and services with cash disbursement",')|
+		"17", pOut('17 Debits Cash Advance/Cash Sale (private value) Used to register loyalty points",')|
+		"18", pOut('18 Debits Pre-Authorisation",')|
+		"19", pOut('19 Debits Payment Completion",')|
+		"20", pOut('20 Credits Returns/Refund",')|
+		"21", pOut('21 Credits Deposits",')|
+		"28", pOut('28 Credits Return (private sale) Used to return loyalty points",')|
+		"30", pOut('30 Inquiry Available funds",')|
+		"31", pOut('31 Inquiry Balance",')|
+		"38", pOut('38 Inquiry Bonus Balance",')|
+		"39", pOut('39 Inquiry DCC",')|
+		"60", pOut('60 Control Load value",')|
+		"61", pOut('61 Control Unload value",')|
+		"90", pOut('90 Control Activate card",')|
+		"91", pOut('91 Control Deactivate card",')),
+	pOut(0x0a, 0x09, 0x09, '"P34" : "'),
+	(	"00", pOut('00 Unspecified account",')|
+		"10", pOut('10 Savings account",')|
+		"20", pOut('20 Checking account - default  Debit card transaction",')|
+		"30", pOut('30 Credit facility - default  Credit card transaction",')|
+		"60", pOut('60 Cash card account",')|
+		"65", pOut('65 Cash card - reserved for private use",')|
+		"66", pOut('66 Cash card - reserved for private use",')),
+	pOut(0x0a, 0x09, 0x09, '"P45" : "'),
+	(	"00", pOut('00 Unspecified account",')|
+		"10", pOut('10 Savings account",')|
+		"20", pOut('20 Checking account - default  Debit card transaction",')|
+		"30", pOut('30 Credit facility - default  Credit card transaction",')|
+		"60", pOut('60 Cash card account",')|
+		"65", pOut('65 Cash card - reserved for private use",')|
+		"66", pOut('66 Cash card - reserved for private use",')),	
+	DropLastChar,
+	pOut('},');
+		
+Bit22	=	/*POS code 12*an*/
+	 pOut(0x0a, 0x09, 0x09, '"P1  Technical ability"       : "'),
+	(	"2", pOut('2 Magnetic stripe",')|
+		"3", pOut('3 Bar code",')|
+		"5", pOut('5 Chip",')|
+		"6", pOut('6 Key entry",')|
+		"A", pOut('A RFID",')|
+		"B", pOut('B Magn & Key entry",')|
+		"C", pOut('C Magn, Chip, Key entry",')|
+		"D", pOut('D Magn & Chip",')|
+		"E", pOut('E Chip & Key entry",')|
+		b, pOutLI, pOut('=Illegal code",')),
+
+	 pOut(0x0a, 0x09, 0x09, '"P2  Authentication ability"  : "'),
+	(	"0", pOut('0 None",')|
+		"1", pOut('1 PIN",')|
+		"6", pOut('6 Unknown",')|
+		"9", pOut('9 EMV",')|
+		"S", pOut('S Signature",')|
+		"T", pOut('T EMV offline PIN",')|
+		"U", pOut('U EMV online PIN",')|
+		"V", pOut('V Sign & EMV offline PIN",')|
+		"X", pOut('X Sign & EMV online PIN",')|
+		"Y", pOut('Y Sign & EMV on/offfline PIN",')|
+		"Z", pOut('Z EMV on/offline PIN",')|
+		b, pOutLI, pOut('=Illegal code",')),
+
+	 pOut(0x0a, 0x09, 0x09, '"P3  Card capture ability"    : "'),
+	(	"0", pOut('0 None",')|
+		"1", pOut('1 Card",')|
+		"T", pOut('T None & EMV Sda/Dda/Cda",')|
+		"U", pOut('U EMV Sda/Dda/Cda",')|
+		"V", pOut('V None & EMV Sda/Dda",')|
+		"W", pOut('W EMV Sda/Dda",')|
+		b, pOutLI, pOut('=Illegal code",')),
+
+	 pOut(0x0a, 0x09, 0x09, '"P4  Operating Environment"   : "'),
+	(	"1", pOut('1 IPT",')|
+		"2", pOut('2 OPT",')|
+		"3", pOut('3 Dealer IPT",')|
+		"4", pOut('4 Dealer OPT",')|
+		b, pOutLI, pOut('=Illegal code",')),
+
+	 pOut(0x0a, 0x09, 0x09, '"P5  Card holder presence"    : "'),		
+	(	"0", pOut('0 Card holder present",')|
+		"1", pOut('1 Card holder not present",')|
+		b, pOutLI, pOut('=Illegal code",')),
+
+	 pOut(0x0a, 0x09, 0x09, '"P6  Card presence"           : "'),
+	(	"0", pOut('0 Card not present",')|
+		"1", pOut('1 Card present",')|
+		b, pOutLI, pOut('=Illegal code",')),
+
+	 pOut(0x0a, 0x09, 0x09, '"P7  Card data input mode"    : "'),
+	(	"2", pOut('2 Magn used",')|
+		"3", pOut('3 Bar code used",')|
+		"5", pOut('5 Chip used",')|
+		"6", pOut('6 Manual done",')|
+		"A", pOut('A RFID used",')|
+		"B", pOut('B Magn used",')|
+		"C", pOut('C Chip used",')|
+		"D", pOut('D Fall back magn used",')|
+		b, pOutLI, pOut('Illegal code",')),
+
+	 pOut(0x0a, 0x09, 0x09, '"P8  Card holder auth method" : "'),		
+	(	"0", pOut('0 CardHolderNotAuthenticated",')|
+		"1", pOut('1 PIN used",')|
+		"5", pOut('5 Signature used",')|
+		"6", pOut('6 DriverLicense used",')|
+		"9", pOut('9 EMV Pin for 2nd card",')|
+		b, pOutLI, pOut('Illegal code",')),	
+
+	 pOut(0x0a, 0x09, 0x09, '"P9  Card holder auth entity" : "'),		
+	(	"0", pOut('0 Card holder not authenticated",')|
+		"1", pOut('1 Chip authorized Cardholder",')|
+		"2", pOut('2 Terminal authorized",')|
+		"3", pOut('3 Authorising agent used",')|
+		"4", pOut('4 Merchant did auth",')|
+		"5", pOut('5 Other auth",')|
+		b, pOutLI, pOut('=Illegal code",')),
+
+	 pOut(0x0a, 0x09, 0x09, '"P10 CAD can update card"     : "'),		
+	(	"0", pOut('0 Unknown",')|
+		"1", pOut('1 CAD cannot update card",')|
+		"2", pOut('2 CAD can update magstripe",')|
+		"3", pOut('3 CAD can update chip",')|
+		b, pOutLI, pOut('=Illegal code",')),
+
+	 pOut(0x0a, 0x09, 0x09, '"P11 POI output ability"      : "'),
+	(	"0", pOut('0 Unknown",')|
+		"1", pOut('1 None",')|
+		"2", pOut('2 Print",')|
+		"3", pOut('3 Display",')|
+		"4", pOut('4 Print and display",')|
+		"5", pOut('5 Special",')|
+		b, pOutLI, pOut('=Illegal code",')),
+
+	 pOut(0x0a, 0x09, 0x09, '"P12 PIN capture capability"  : "'),		
+	(	"0", pOut('None",')|
+		"1", pOut('Unknown",')|
+		"4", pOut('4 digit",')|
+		"5", pOut('5 digit",')|
+		"6", pOut('6 digit",')|
+		"7", pOut('7 digit",')|
+		"8", pOut('8 digit",')|
+		"9", pOut('9 digit",')|
+		"A", pOut('10 digit",')|
+		"B", pOut('11 digit",')|
+		"C", pOut('12 digit",')|
+		b, pOutLI, pOut('Illegal code",')),	
+	DropLastChar,
+	pOut('},');
+		
+Bit24	=	/* Function code*/
+		"101", pOut("Original authorization – amount estimated")|
+		"108", pOut("Inquiry")|
+		"181", pOut("Original authorization – amount estimated, 9100 from IPT")|
+		"182", pOut("Original authorization – amount known, 9100 from Oil FEP")|
+		"200", pOut("Original financial request/advice  1200 original request, 1220 standing-in for the Card Issuer")|
+		"201", pOut("Previously approved authorization – amount the same (1220 previously authorised with 1100)")|
+		"202", pOut("Previously approved authorization – amount differs (1220 previously authorised with 1100)")|
+		"281", pOut("Previously approved authorization – amount the same (1220 from IPT)")|
+		"282", pOut("Previously approved authorization – amount differs (1220 from IPT)")|
+		"301", pOut("Add record (Loyalty card link/wrong PIN used")|
+		"302", pOut("Change record (PIN change)")|
+		"400", pOut("Full reversal, transaction did not complete as approved")|
+		"500", pOut("Final reconciliation")|
+		"501", pOut("Checkpoint reconciiation")|
+		"502", pOut("Final reconciliation in a specific currency")|
+		"503", pOut("Checkpoint deconciliation in a specific currency")|
+		"801", pOut("System condition/sign-on")|
+		"802", pOut("System condition/sign-off")|
+		"811", pOut("System security/key change")|
+		"814", pOut("System security/device authentication PIN Pad initialisation")|
+		"831", pOut("System audit control/echo test")|
+		(3*b), pOut("Unknown IFSF code!");
+
+Bit25 = 	"1003", pOut("Card Issuer unavailable (Use for FEP unavailable)")|
+		"1004", pOut("Terminal Processed")|
+		"1005", pOut("ICC Processed")|
+		"1006", pOut("Under floor limit")|
+		"1007", pOut("Stand-in processing at the acquirer's option")|
+		"1376", pOut("Reversal from previous batch (Sent as refund because reversal from previous batch rejected)")|
+		"1377", pOut("Manual voucher processed (Punch bureau)")|
+		"3700", pOut("Customer PIN Change  Private use in [1]")|
+		"3701", pOut("Loyalty Link  Private use in [1]")|
+		"3702", pOut("Advice of invalid PIN used  Private use in [1]")|
+		"1500", pOut("ICC application,common data file unable to process")|
+		"1501", pOut("ICC application,application data file unable to process")|
+		"1502", pOut("ICC random selection")|
+		"1503", pOut("Terminal random selection")|
+		"1504", pOut("Terminal unable to process ICC")|
+		"1505", pOut("On-line forced by ICC")|
+		"1506", pOut("Online forced by card aceptor")|
+		"1507", pOut("Online forced by CAD to be updated")|
+		"1508", pOut("On-line forced by terminal")|
+		"1509", pOut("Online forced by card issuer")|
+		"1510", pOut("Over floor limit")|
+		"1511", pOut("Merchant suspicious")|
+		"1776", pOut("POS offline voice auth  Indicates request comes from Oil FEP and resulting approval codes will be used in separate 1220 transaction from the POS")|
+		"3700", pOut("Customer PIN Change  Private use in [1]")|
+		"3701", pOut("Loyalty Link  Private use in [1]")|
+		"3702", pOut("Advice of invalid PIN used  Private use in [1]")|
+		"4000", pOut("Customer Cancellation")|
+		"4020", pOut("Invalid Response, No action taken  Problem with the MAC on the response")|
+		"4021", pOut("Timeout Waiting for response")|
+		"4351", pOut("Cancellation – unmatched signature  Private use in [1]")|
+		"4352", pOut("Card declined transaction  Private use in [1]")|
+		"4353", pOut("Error in chip processing")|
+		"4354", pOut("System error")|
+		"8601", pOut("Communications Test  Private use in [1]")|
+		"8602", pOut("Key Exchange  Private use in [1]")|
+		"8603", pOut("Log on  Private use in [1]")|
+		"8604", pOut("Log off  Private use in [1]")|
+		(4*b), pOut("Unknown IFSF code!");
+
+Bit26 = 	"5143", pOut("Motor vehicle supplies and new parts")|
+		"5172", pOut("Petroleum and petroleum products")|
+		"5499", pOut("Convenience stores")|
+		"5541", pOut("Service station")|
+		"5542", pOut("Service station outdoor (Worldline WAP protocol)")|
+		"4468", pOut("Marinas, marine service-supplies")|
+		"4582", pOut("Airports, flying fields, airport terminals")|
+		"4784", pOut("Tolls, bridge fees")|
+		"5532", pOut("Automotive tyre stores")|
+		"5533", pOut("Automotive parts, accessories stores")|
+		"5542", pOut("Automated gasoline dispenser")|
+		"5812", pOut("Eating places, restaurants")|
+		"5814", pOut("Fast food restaurants")|
+		"5983", pOut("Fuel Dealers - Coal, Fuel Oil, Liquefied Petroleum, Wood")|
+		"7523", pOut("Automobile parking lots and garages")|
+		"7841", pOut("Video rental stores")|
+		"7542", pOut("Car washes")|
+		(4*b), pOut("Unknown IFSF code!");
+
+Bit39 =	"000", pOut("Approved")|
+	"001", pOut("Approved, honour with Identification")|
+	"002", pOut("Approved, for partial amount")|
+	"003", pOut("Approved, VIP")|
+	"005", pOut("Approved, account type specified by card issuer")|
+	"006", pOut("Approved, for partial amount, account type specified by card issuer")|
+	"007", pOut("Approved, update ICC")|
+	"080", pOut("Approved, (liability not accepted)")|
+	"081", pOut("Declined, honor with Identification (liability not accepted)")|
+	"100", pOut("Declined, do not honour")|
+	"101", pOut("Declined, expired card")|
+	"102", pOut("Declined, suspected fraud")|
+	"103", pOut("Declined, card Acceptor contact acquirer")|
+	"104", pOut("Declined, restricted card")|
+	"106", pOut("Declined, allowable PIN tries exceeded")|
+	"107", pOut("Declined, refer to Card Issuer")|
+	"108", pOut("Declined, refer to card issuers special conditions for use May be combined with message in 62-3")|
+	"109", pOut("Declined, invalid merchant")|
+	"110", pOut("Declined, invalid Amount")|
+	"111", pOut("Declined, invalid Card Number")|
+	"112", pOut("Declined, PIN data required")|
+	"114", pOut("Declined, no account of type requested")|
+	"115", pOut("Declined, requested Function not supported")|
+	"116", pOut("Declined, not sufficient funds")|
+	"117", pOut("Declined, incorrect PIN")|
+	"118", pOut("Declined, no card record")|
+	"119", pOut("Declined, transaction not permitted to the customer")|
+	"120", pOut("Declined, transaction not permitted to the terminal")|
+	"121", pOut("Declined, exceeds withdrawal amount limit")|
+	"122", pOut("Declined, security violation")|
+	"123", pOut("Declined, exceeds withdrawal frequency limit")|
+	"125", pOut("Declined, card not effective")|
+	"126", pOut("Declined, invalid PIN block")|
+	"127", pOut("Declined, PIN length error")|
+	"128", pOut("Declined, PIN key sync error")|
+	"180", pOut("Declined, redemption denied/mismatch by 2nd card mismatch")|
+	"181", pOut("Declined, card blocked")|
+	"182", pOut("Declined, account blocked")|
+	"183", pOut("Declined, incorrect odometer reading")|
+	"185", pOut("Declined, product(s) not allowed")|
+	"186", pOut("Declined, allowable PIN tries exceeded")|
+	"187", pOut("Declined, previous PIN used")|
+	"188", pOut("Declined, PIN change required")|
+	"190", pOut("Declined, RFID: Transponder is blocked")|
+	"191", pOut("Declined, RFID: Unknown transponder")|
+	"192", pOut("Declined, RFID: Illegal challenge response")|
+	"200", pOut("Declined, do not honor – Capture")|
+	"201", pOut("Declined, expired card – Capture")|
+	"202", pOut("Declined, suspected fraud – Capture")|
+	"203", pOut("Declined, card acceptor contact acquirer – Capture")|
+	"204", pOut("Declined, restricted card – Capture")|
+	"206", pOut("Declined, allowable PIN tries exceeded – Capture")|
+	"208", pOut("Declined, lost card – Capture")|
+	"209", pOut("Declined, stolen card – Capture ")|
+	"300", pOut("Successful")|
+	"302", pOut("Unable to locate record on file")|
+	"306", pOut("Not successful")|
+	"309", pOut("Unknown file")|
+  	"380", pOut("Declined, Original PIN incorrect")|   
+	"381", pOut("Declined, Allowable PIN tries exceeded")|   
+	"382", pOut("Declined, PIN data required")|   
+	"383", pOut("Declined, Invalid PIN block")|   
+	"384", pOut("Declined, PIN length error")|   
+	"385", pOut("Declined, Allowable PIN retries exceeded – Capture")| 
+	"400", pOut("Accepted (400)")|
+	"480", pOut("Accepted but not matched against previous request")|
+	"500", pOut("Reconciled: In balance. Always return successful")| 
+	"501", pOut("Reconciled: Out of balance")|
+	"580", pOut("Reconciled; Out of balance do not attempt error recovery")|
+	"800", pOut("Accepted (800)")|
+	"900", pOut("Advice acknowledged - no financial liability accepted  transactions, which are settled by another means")|
+	"901", pOut("Advice acknowledged - financial liability accepted =. OLTC transactions, which are settled on line")|
+	"904", pOut("Declined, format error")|
+	"906", pOut("Declined, utover in progress")| 
+	"907", pOut("Declined, card issuer or switch inoperative")|
+	"909", pOut("Declined, system malfunction")|
+	"911", pOut("Declined, card issuer timed out")|
+	"912", pOut("Declined, card issuer unavailable")|
+	"916", pOut("Declined, MAC incorrect")|
+	"917", pOut("Declined, MAC key synch error")|
+	"921", pOut("Security, soft/hardware error - no action")|
+	"922", pOut("Declined, message number out of sequence");
+
+Bit49 =	"999", pOut("Liter IDS")|
+	"978", pOut("EUR Euro")|
+	"826", pOut("GBP Pound Sterling")|
+	"203", pOut("CZK Czech Koruna")|
+	"578", pOut("NOK Norwegian Krone")|
+	"752", pOut("SEK Swedish Krona")|
+	"208", pOut("DKK Danish Krone")|
+	"810", pOut("RUR Russian Ruble")|
+	"643", pOut("RUB Russian Ruble")|
+	"642", pOut("ROL Leu")|
+	"348", pOut("HUF Forint")|
+	"703", pOut("SKK Slovak Koruna")|
+	"792", pOut("TRL Turkish Lira")|
+	(3*b), pOut("Warning unknown valuta");
+
+Bit53H2H = LLVAR,
+		b,	pOut(0x0a, 0x09, 0x09, '"B53.1 Key generation master key": "'), pOutLIHex, pOut('",'),		/* wrong spec in CGI spec. says n1 */
+		b,	pOut(0x0a, 0x09, 0x09, '"B53.2 Key version master key"   : "'), pOutLIHex, pOut('",'),		/* wrong spec in CGI spec. says n1 */
+		(16*b),	pOut(0x0a, 0x09, 0x09, '"B53.3 RNDmes" : "'), pOutLIHex, pOut('",'),
+		(16*b),	pOut(0x0a, 0x09, 0x09, '"B53.4 RNDpac" : "'), pOutLIHex, pOut('",'),
+	DropLastChar,
+	pOut('},');
+	
+Bit53P2H= LLVAR,
+		((10*HexDig),	pOut(0x0a, 0x09, 0x09, '"B53.1 BDKId BDK identifier"  : "'), pOutLI, pOut('",')
+		|(10*b),	pOut(0x0a, 0x09, 0x09, '"B53.1 Warning BDK identifier expected in hex" : "'), pOutLIHex, pOut('",')
+		),
+		((10*HexDig),	pOut(0x0a, 0x09, 0x09, '"B53.2 KSN   Key Serial Number": "'), pOutLI, pOut('",')	/* wrong spec in CGI spec. says n1 */
+		|(10*b),	pOut(0x0a, 0x09, 0x09, '"B53.1 KSN   Key Serial Number": "'), pOutLIHex, pOut('",')	/* this is correct */
+		),	
+		(3*n),		pOut(0x0a, 0x09, 0x09, '"B53.3 KSN   Descriptor"      : "'), pOutLI, pOut('",'),
+	DropLastChar,
+	pOut('},');
+	
+
+
+IDSProduct =
+			 "000", pOut("000 AdBlue")
+			|"001", pOut("001 Diesel")
+			|"003", pOut("003 Gasoil Industrial")
+			|"005", pOut("005 LIC (Liquid Carbon Dioxide)")
+			|"009", pOut("009 LPG (Liquidfied Petroleum Gas)")
+			|"010", pOut("010 LNG Restricted")
+			|"011", pOut("011 ED95 (Green Biofuel Heavy Transport")
+			|"012", pOut("012 CNG/CBG (Compressed Natural Gas)")
+			|"015", pOut("015 Gasoil Red")
+			|"016", pOut("016 Spain Red Diesel")
+			|"017", pOut("017 Bio Diesel")
+			|"019", pOut("019 RME")
+			|"020", pOut("020 LNG")
+			|"029", pOut("029 Super Diesel - Q8SS DK")
+			|"041", pOut("041 Q8 T 905 10W-40")
+			|"060", pOut("060 Water splash")
+			|"080", pOut("080 Carwash")
+			|(3*b),	pOutLI, pOut(" Warning. Unknown product");
+
+Bit62IDS = LLLVAR, ( "00"		  ,pOut(0x0a, 0x09, 0x09, '"00" : "All products allowed",')	/* IFSF */
+		|		   pOut(0x0a, 0x09, 0x09,	'"B62.1" : ['),
+		 (LLVAR* 	 					<<	dec rFactCnt>>
+		 							<<	dec rFactCnt>> 		/* curious spec: set = 3bytes */
+		 	 (pOut(0x0a, 0x09, 0x09, 0x09,'"'), IDSProduct, pOut('",'))),
+		DropLastChar, pOut("],")		
+		),
+		("0",	pOut(0x0a, 0x09, 0x09,	'"B62.2" : "0   Default device type",')
+		|n,	pOut(0x0a, 0x09, 0x09,	'"B62.2" : "Device type ('), pOutLI, pOut(')"')
+		),
+
+		(LLLVAR*ans),	pOut(0x0a, 0x09, 0x09,	'"B62.3" : "'), pOutLI, pOut(' Message",'),
+		
+	DropLastChar,
+	pOut('},');
+	
+Bit62 = LLLVAR, 
+		( "00",	 pOut(0x0a, 0x09, 0x09,	'"00" : "All products allowed",')
+		|	 pOut(0x0a, 0x09, 0x09,	'"B62.1" : ['),
+		 (LLVAR* 	<<	dec rFactCnt>>
+		 		<<	dec rFactCnt>>
+		        (pOut(0x0a, 0x09, 0x09, 0x09,'"'), IDSProduct, pOut('",'))
+		 ), DropLastChar, pOut("],")	
+		),
+
+		( n, 	 pOut(0x0a, 0x09, 0x09,	'"B62.2" : "Device type ('), pOutLI, pOut(')",') ),
+		( "000", pOut(0x0a, 0x09, 0x09,	'"B62.3" : "Message ()"')
+		|	 pOut(0x0a, 0x09, 0x09,	'"B62.3" : "Message ('),
+		  (LLLVAR*(ans, pOutLI), pOut(')"'))),
+		pOut('},');
+
+Bit63 =  (3*n), pOut(0x0a, 0x09, 0x09, '"B63-1 Service level"      : "'),
+		("S", pOut('S=Self serve",')|
+		 "F", pOut('F=Full serve",')|
+		 " ", pOut('No info",')|
+		 b,   pOut('Warning, unknown IFSF code: '), pOutLI, pOut('",') ),
+	 	(2*n),			pOut(0x0a, 0x09, 0x09, '"B63-2 Number of products" : "'), pOutLI, pOut('",')
+	      + (2*n)* ( 		pOut(0x0a, 0x09, 0x09, '"B63-3 Product code"       : "'), IDSProduct, pOut('",'),
+					pOut(0x0a, 0x09, 0x09, '"B63-4 Unit of measure"    : "'),
+			 			("L", pOut('Liter",')|
+			 	 		 "U", pOut('Unit",')|
+			 	 		 "W", pOut('Kg",')|
+			 	 		 "O", pOut('None",')|
+			 	 		  b , pOut('Warning, Unknown measure",')),
+			 	{n}, 	pOut(0x0a, 0x09, 0x09, '"B63-5.1 Quantity"         : "'), pOutLIdpTrim,	pOut('",'),
+			 ["P",	{n}, 	pOut(0x0a, 0x09, 0x09, '"B63-5.2 Pump"             : "'), pOutLI,	pOut('",')],
+			 ["N",	{n}, 	pOut(0x0a, 0x09, 0x09, '"B63-5.3 Nozzle"           : "'), pOutLI,	pOut('",')],
+			 "\",	{n}, 	pOut(0x0a, 0x09, 0x09, '"B63-6 Unit Price"         : "'), pOutLIdpTrim,	pOut('",'),
+			 "\",	{n}, 	pOut(0x0a, 0x09, 0x09, '"B63-7 Amount"             : "'), pOutLI,	pOut('",'),
+			 "\",	 an, 	pOut(0x0a, 0x09, 0x09, '"B63-8 Tax code"           : "'), pOutLI,	pOut('",'),
+				{n}, 	pOut(0x0a, 0x09, 0x09, '"B63-9 Added product code" : "'), pOutLI,	pOut('",'),
+			 "\"
+		        ),
+	DropLastChar,
+	pOut('},');
+
+

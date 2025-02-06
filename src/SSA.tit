@@ -1,0 +1,22 @@
+LIStore ; Store LstIn at inline address
+	; usage: LIStore(<address>)
+	; uses :rax, rsi, rdi, rdx
+	; Calls: end.
+
+TapMsg ; Display txt by pOut between TapMsg and MsgTap
+	; Usage: TapMsg <code with pOut> MsgTap
+	; Condition: code should not extend stack
+	; Calls: MessageMem, end.
+
+IsBit	; usage: IsBit(n) or Call-db-statement)
+	; out: rOk = nth bit of Bitmap0
+	; uses rax
+	; mod 64, to keep references in line with IFSF
+	; above 64, be sure to have set BitMap current
+	; Calls: end.
+
+IsBit1	; usage: IsBit(n) or Call-db-statement)
+	; out: rOk = nth bit of Bitmap0
+	; uses rax
+	; Calls: end.
+
