@@ -4,7 +4,7 @@ The app is very adaptable. Just have a look to the EBNF source file (SSA.bnf) an
 The current configuration is for human understanding the message albeit in json format.
 Compile your adaptation using the linux command ./EBNF.sh. Have your EBNF development environment as implied in the Github EBNFPlus repository.
 
-Supplied supports following messages (text is a snip from file *SSA.bnf*):
+Supplied configuration supports following messages (text is a snip from file *SSA.bnf*):
 
      MTI = 	Message (0x0a),
 	"1100"		,pOut(0x0a, '"1100 AuthorizationRequest":') 		,MsgLI	|
